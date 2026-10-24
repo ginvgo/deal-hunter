@@ -156,58 +156,76 @@
         localStorage.setItem('serper_api_key', this.apiKey);
         this.showSettings = false;
       },
-      async handleSearch() {
-        const asin = this.extractAsin(this.inputQuery);
-        if (!asin) {
-          alert('请输入有效的 ASIN 码或商品 URL！');
-          return;
-        }
-        this.currentAsin = asin;
+async handleSearch() {
+  const asin = this.extractAsin(this.inputQuery);
+  if (!asin) {
+    alert('请输入有效的 ASIN 码或商品 URL！');
+    return;
+  }
+  this.currentAsin = asin;
 
-        if (!this.apiKey) {
-          alert('请先点击右上角配置 Serper API Key（注册即可获得免费查询额度）');
-          this.showSettings = true;
-          return;
-        }
+  // 清洗 Key（去除可能误复制的空格/换行）
+  const cleanKey = (this.apiKey || '').trim();
+  if (!cleanKey) {
+    alert('请先点击右上角配置 Serper API Key');
+    this.showSettings = true;
+    return;
+  }
 
-        this.loading = true;
-        this.results = [];
+  this.loading = true;
+  this.results = [];
 
-        try {
-          const query = `"${asin}" site:slickdeals.net OR site:dealnews.com OR site:facebook.com OR site:reddit.com OR site:t.me`;
-          const resp = await fetch('https://google.serper.dev/search', {
-            method: 'POST',
-            headers: {
-              'X-API-KEY': this.apiKey,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ q: query, num: 25 })
-          });
-          const data = await resp.json();
+  try {
+    // 构造最兼容的查询语法
+    const queryStr = `${asin} (site:slickdeals.net OR site:dealnews.com OR site:facebook.com OR site:reddit.com OR site:t.me)`;
 
-          if (data.organic) {
-            this.results = data.organic.map(item => {
-              const fullText = `${item.title} ${item.snippet}`;
-              const codeMatch = fullText.match(/(?:code|promo|coupon|use|discount)[:\s]+([A-Z0-9]{4,15})\b/i);
-              const discountMatch = fullText.match(/(\b\d{1,2}%\s*off|\$\d+(?:\.\d{2})?\s*off\b)/i);
-
-              return {
-                platform: this.identifyPlatform(item.link),
-                title: item.title,
-                link: item.link,
-                snippet: item.snippet,
-                date: item.date || '近期',
-                promo_code: codeMatch ? codeMatch[1] : null,
-                discount: discountMatch ? discountMatch[1] : null
-              };
-            });
-          }
-        } catch (e) {
-          alert('查询失败，请检查 API Key 是否正确或网络连接');
-        } finally {
-          this.loading = false;
-        }
+    // 发送标准请求（仅保留必需的 q 字段，避免 400 错误）
+    const resp = await fetch('https://google.serper.dev/search', {
+      method: 'POST',
+      headers: {
+        'X-API-KEY': cleanKey,
+        'Content-Type': 'application/json'
       },
+      body: JSON.stringify({ 
+        q: queryStr 
+      })
+    });
+
+    const data = await resp.json();
+
+    // 如果服务端返回了错误（例如 400），输出具体原因
+    if (!resp.ok) {
+      console.error('Serper 返回错误详情:', data);
+      alert(`查询失败 (${resp.status}): ${data.message || JSON.stringify(data)}`);
+      return;
+    }
+
+    if (data.organic && data.organic.length > 0) {
+      this.results = data.organic.map(item => {
+        const fullText = `${item.title || ''} ${item.snippet || ''}`;
+        const codeMatch = fullText.match(/(?:code|promo|coupon|use|discount)[:\s]+([A-Z0-9]{4,15})\b/i);
+        const discountMatch = fullText.match(/(\b\d{1,2}%\s*off|\$\d+(?:\.\d{2})?\s*off\b)/i);
+
+        return {
+          platform: this.identifyPlatform(item.link || ''),
+          title: item.title,
+          link: item.link,
+          snippet: item.snippet,
+          date: item.date || '近期',
+          promo_code: codeMatch ? codeMatch[1] : null,
+          discount: discountMatch ? discountMatch[1] : null
+        };
+      });
+    } else {
+      console.log('未搜到匹配的站外记录');
+    }
+  } catch (e) {
+    console.error('网络或解析异常:', e);
+    alert('请求发送失败，请检查网络是否能访问 Serper');
+  } finally {
+    this.loading = false;
+  }
+}
       identifyPlatform(url) {
         if (url.includes('slickdeals.net')) return 'Slickdeals';
         if (url.includes('dealnews.com')) return 'DealNews';
