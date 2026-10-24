@@ -3,123 +3,235 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Amazon 亚马逊站外推广反查工具</title>
-  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <title>Amazon 站外推广反查雷达 | Off-site Deal Hunter</title>
+  <!-- 引入 Vue 3 & Tailwind CSS & FontAwesome -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    [v-cloak] { display: none; }
+    .tab-active { border-bottom: 2px solid #2563eb; color: #2563eb; font-weight: 600; }
+  </style>
 </head>
-<body class="bg-gray-50 text-gray-800">
-<div id="app" class="max-w-6xl mx-auto px-4 py-8">
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen">
 
-  <!-- Header -->
-  <div class="flex justify-between items-center mb-8 border-b pb-4">
+<div id="app" v-cloak class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+  <!-- 顶部导航 -->
+  <header class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-slate-200 gap-4">
     <div>
-      <h1 class="text-2xl font-bold text-gray-900 flex items-center gap-2">
-        <i class="fa-brands fa-amazon text-amber-500"></i> 亚马逊站外推广反查雷达
-      </h1>
-      <p class="text-sm text-gray-500 mt-1">输入 ASIN 即可一键反查 Slickdeals, FB群组, Reddit, Telegram 投放痕迹</p>
+      <div class="flex items-center gap-3">
+        <span class="bg-amber-500 text-white p-2 rounded-xl text-lg flex items-center justify-center shadow-sm">
+          <i class="fa-brands fa-amazon"></i>
+        </span>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900">亚马逊站外推广反查工具</h1>
+        <span class="text-xs bg-blue-100 text-blue-700 font-semibold px-2.5 py-0.5 rounded-full">v1.2 GitHub Pages 版</span>
+      </div>
+      <p class="text-sm text-slate-500 mt-1">反查竞品 Deal 站发帖、FB 群组、Telegram、优惠券码及 Keepa 销量归因</p>
     </div>
-    <!-- 设置 API Key 弹窗入口 -->
-    <button @click="showSettings = true" class="text-gray-500 hover:text-gray-700 bg-white border px-3 py-1.5 rounded-lg text-sm flex items-center gap-2 shadow-sm">
-      <i class="fa-solid fa-gear"></i>
-      <span>{{ apiKey ? 'API 已配置' : '配置 Serper Key' }}</span>
-    </button>
-  </div>
 
-  <!-- 搜索输入框 -->
-  <div class="bg-white p-6 rounded-xl shadow-sm border mb-6">
-    <div class="flex gap-3">
-      <input 
-        v-model="inputQuery" 
-        @keyup.enter="handleSearch"
-        placeholder="输入 ASIN 或亚马逊商品链接 (例如: B08N5WRWNW 或 https://amazon.com/dp/...)" 
-        class="flex-1 border rounded-lg px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+    <!-- 站点与 Key 配置 -->
+    <div class="flex items-center gap-3">
+      <select v-model="amazonDomain" class="bg-white border border-slate-300 text-sm rounded-lg px-3 py-2 shadow-sm focus:ring-2 focus:ring-blue-500">
+        <option value="com">🇺🇸 美国站 (.com)</option>
+        <option value="co.uk">🇬🇧 英国站 (.co.uk)</option>
+        <option value="de">🇩🇪 德国站 (.de)</option>
+        <option value="co.jp">🇯🇵 日本站 (.co.jp)</option>
+      </select>
+      <button @click="showKeyModal = true" class="flex items-center gap-2 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 px-3.5 py-2 rounded-lg text-sm shadow-sm transition">
+        <i class="fa-solid fa-key" :class="apiKey ? 'text-emerald-500' : 'text-slate-400'"></i>
+        <span>{{ apiKey ? 'API 已就绪' : '配置 Serper Key' }}</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 核心输入区域 -->
+  <section class="mt-8 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+    <div class="flex flex-col md:flex-row gap-3">
+      <div class="relative flex-1">
+        <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
+          <i class="fa-solid fa-magnifying-glass"></i>
+        </span>
+        <input 
+          v-model="rawInput" 
+          @keyup.enter="startAnalysis"
+          type="text" 
+          placeholder="粘贴亚马逊商品链接 或 直接输入 ASIN (如: B08N5WRWNW)..." 
+          class="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm transition"
+        />
+      </div>
       <button 
-        @click="handleSearch" 
+        @click="startAnalysis" 
         :disabled="loading"
-        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-medium transition disabled:bg-blue-300 flex items-center gap-2">
-        <i v-if="loading" class="fa-solid fa-spinner fa-spin"></i>
-        <span>{{ loading ? '查询中...' : '开始反查' }}</span>
+        class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-8 py-3 rounded-xl font-medium text-sm transition flex items-center justify-center gap-2 shadow-sm">
+        <i v-if="loading" class="fa-solid fa-circle-notch fa-spin"></i>
+        <span>{{ loading ? '深度检索中...' : '开始站外反查' }}</span>
       </button>
     </div>
 
-    <!-- 免 Key 快速直达指令（无需 API） -->
-    <div class="mt-4 flex flex-wrap items-center gap-2 text-xs text-gray-500">
-      <span>免 API 快速跳查:</span>
-      <button @click="openDirectSearch('all')" class="bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded">全网站外</button>
-      <button @click="openDirectSearch('slickdeals')" class="bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded">Slickdeals</button>
-      <button @click="openDirectSearch('facebook')" class="bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded">Facebook 群组</button>
-      <button @click="openDirectSearch('telegram')" class="bg-gray-100 hover:bg-gray-200 px-2.5 py-1 rounded">Telegram Deals</button>
+    <!-- 快捷免 Key 搜索矩阵 (哪怕没配 Key 也能 100% 查出数据) -->
+    <div class="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
+      <span class="text-slate-400 font-medium"><i class="fa-solid fa-bolt text-amber-500 mr-1"></i>免 Key 一键直达矩阵:</span>
+      <button @click="openDirectDork('all')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition">全网 Deal 站反查</button>
+      <button @click="openDirectDork('slickdeals')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition">Slickdeals</button>
+      <button @click="openDirectDork('dealnews')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition">DealNews</button>
+      <button @click="openDirectDork('facebook')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition">Facebook 促销群</button>
+      <button @click="openDirectDork('telegram')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition">Telegram Deal 频道</button>
+      <button @click="openDirectDork('reddit')" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition">Reddit 折扣区</button>
     </div>
-  </div>
+  </section>
 
-  <!-- 结果呈现区域 -->
-  <div v-if="currentAsin" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    
-    <!-- 左侧 2 列：站外发帖详情 -->
-    <div class="lg:col-span-2 space-y-4">
-      <div class="flex justify-between items-center bg-white p-4 rounded-xl border">
-        <span class="text-sm font-medium">当前查询 ASIN: <span class="font-bold text-blue-600">{{ currentAsin }}</span></span>
-        <span class="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">共发现 {{ results.length }} 条站外记录</span>
-      </div>
+  <!-- 数据仪表盘 (有 ASIN 时激活) -->
+  <main v-if="currentAsin" class="mt-8 space-y-6">
 
-      <div v-if="results.length === 0 && !loading" class="bg-white p-8 rounded-xl border text-center text-gray-400">
-        未检测到公开站外记录，或未配置有效 API Key（可点击上方免 API 快捷直达）。
-      </div>
-
-      <!-- 帖子列表 -->
-      <div v-for="(item, idx) in results" :key="idx" class="bg-white p-5 rounded-xl border shadow-sm hover:shadow-md transition">
-        <div class="flex items-center justify-between mb-2">
-          <span :class="platformBadgeClass(item.platform)" class="text-xs font-semibold px-2.5 py-0.5 rounded-full">
-            {{ item.platform }}
-          </span>
-          <span class="text-xs text-gray-400">{{ item.date }}</span>
+    <!-- 1. 数据统计卡片 -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">目标 ASIN</span>
+        <div class="text-xl font-bold text-slate-800 mt-1 flex items-center gap-2">
+          {{ currentAsin }}
+          <a :href="`https://www.amazon.${amazonDomain}/dp/${currentAsin}`" target="_blank" class="text-xs text-blue-500 hover:underline">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
+          </a>
         </div>
-        <a :href="item.link" target="_blank" class="font-semibold text-gray-900 hover:text-blue-600 line-clamp-1 mb-2">
-          {{ item.title }}
-        </a>
-        <p class="text-sm text-gray-600 line-clamp-2 mb-3">{{ item.snippet }}</p>
-        
-        <!-- 自动提取的折扣码标签 -->
-        <div class="flex items-center gap-3 text-xs border-t pt-3">
-          <span v-if="item.promo_code" class="bg-red-50 text-red-600 border border-red-200 px-2 py-1 rounded font-mono font-bold">
-            <i class="fa-solid fa-tag"></i> 优惠码: {{ item.promo_code }}
-          </span>
-          <span v-if="item.discount" class="bg-green-50 text-green-700 border border-green-200 px-2 py-1 rounded font-bold">
-            力度: {{ item.discount }}
-          </span>
-          <a :href="item.link" target="_blank" class="ml-auto text-blue-500 hover:underline">查看帖子 <i class="fa-solid fa-arrow-up-right-from-square"></i></a>
-        </div>
+      </div>
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">检出站外痕迹</span>
+        <div class="text-xl font-bold text-blue-600 mt-1">{{ dealList.length }} <span class="text-xs font-normal text-slate-500">条公开记录</span></div>
+      </div>
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">提取到优惠券码</span>
+        <div class="text-xl font-bold text-rose-600 mt-1">{{ extractedCodes.length }} <span class="text-xs font-normal text-slate-500">个唯一促销码</span></div>
+      </div>
+      <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+        <span class="text-xs font-medium text-slate-400 uppercase tracking-wider">覆盖主要渠道</span>
+        <div class="text-sm font-semibold text-slate-700 mt-1 truncate">{{ platformSummaryText }}</div>
       </div>
     </div>
 
-    <!-- 右侧 1 列：Keepa 排名图与效果校验 -->
-    <div class="space-y-4">
-      <div class="bg-white p-5 rounded-xl border shadow-sm">
-        <h3 class="font-bold text-gray-800 mb-2 flex items-center gap-2">
-          <i class="fa-solid fa-chart-line text-blue-500"></i> Keepa 排名与价格走势
+    <!-- 2. 主体布局：左侧分析列表，右侧 Keepa 销量归因 -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- 左侧：发帖记录详情 (8列) -->
+      <div class="lg:col-span-7 space-y-4">
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+          <div class="flex items-center justify-between pb-4 border-b border-slate-100">
+            <h2 class="font-bold text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-list-check text-blue-500"></i> 站外发帖时间轴
+            </h2>
+            <span class="text-xs text-slate-400">已按关联度排序</span>
+          </div>
+
+          <!-- 无数据提示 -->
+          <div v-if="dealList.length === 0 && !loading" class="py-12 text-center">
+            <i class="fa-solid fa-box-open text-slate-300 text-4xl mb-3"></i>
+            <p class="text-sm text-slate-500">未检测到结构化站外数据</p>
+            <p class="text-xs text-slate-400 mt-1">若配置了 API Key 仍为空，请使用上方“免 Key 一键直达矩阵”在 Google 确认原生结果。</p>
+          </div>
+
+          <!-- 发帖卡片列表 -->
+          <div class="divide-y divide-slate-100">
+            <div v-for="(item, idx) in dealList" :key="idx" class="py-4 hover:bg-slate-50/50 transition rounded-xl px-2">
+              <div class="flex items-center justify-between text-xs mb-1.5">
+                <span :class="badgeClass(item.platform)" class="px-2.5 py-0.5 rounded-full font-semibold">
+                  {{ item.platform }}
+                </span>
+                <span class="text-slate-400 font-mono">{{ item.date || '历史发帖' }}</span>
+              </div>
+              <a :href="item.link" target="_blank" class="text-sm font-medium text-slate-800 hover:text-blue-600 line-clamp-2 leading-snug">
+                {{ item.title }}
+              </a>
+              <p class="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed">
+                {{ item.snippet }}
+              </p>
+
+              <!-- 智能分析标签：促销码 / 折扣力度 / 推广Tag -->
+              <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                <span v-if="item.promoCode" class="inline-flex items-center gap-1 bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded-md font-mono font-bold">
+                  <i class="fa-solid fa-tag text-[10px]"></i> 码: {{ item.promoCode }}
+                </span>
+                <span v-if="item.discount" class="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md font-bold">
+                  <i class="fa-solid fa-percent text-[10px]"></i> {{ item.discount }}
+                </span>
+                <span v-if="item.affiliateTag" class="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-md font-mono text-[11px]">
+                  <i class="fa-solid fa-user-tag text-[10px]"></i> Tag: {{ item.affiliateTag }}
+                </span>
+                <a :href="item.link" target="_blank" class="ml-auto text-blue-500 hover:underline inline-flex items-center gap-1">
+                  查看源帖 <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                </a>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 右侧：Keepa 归因分析 (5列) -->
+      <div class="lg:col-span-5 space-y-4">
+        <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm sticky top-6">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <h3 class="font-bold text-slate-800 flex items-center gap-2">
+              <i class="fa-solid fa-chart-line text-emerald-500"></i> Keepa 效果归因
+            </h3>
+            <span class="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">BSR 走势</span>
+          </div>
+
+          <p class="text-xs text-slate-500 mt-3 leading-relaxed">
+            <strong>归因逻辑：</strong>核对左侧发帖时间。若在发帖当天或次日，下方的<strong>绿色线条（BSR 排名）突然跳水冲顶（数值骤降）</strong>，表明该次站外发帖起量成功。
+          </p>
+
+          <!-- Keepa 免密图表 -->
+          <div class="mt-4 border border-slate-200 rounded-xl overflow-hidden bg-slate-50">
+            <img 
+              :src="`https://graph.keepa.com/pricehistory.png?asin=${currentAsin}&domain=${amazonDomain}`" 
+              alt="Keepa Sales Rank & Price History"
+              class="w-full h-auto block"
+              loading="lazy"
+            />
+          </div>
+
+          <!-- 提取到的促销码汇总 -->
+          <div class="mt-5 pt-4 border-t border-slate-100" v-if="extractedCodes.length > 0">
+            <span class="text-xs font-semibold text-slate-700 block mb-2">已侦测到的优惠码历史：</span>
+            <div class="flex flex-wrap gap-1.5">
+              <span v-for="c in extractedCodes" :key="c" class="bg-rose-50 border border-rose-200 text-rose-700 font-mono text-xs px-2 py-1 rounded-md font-bold">
+                {{ c }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- Serper Key 配置弹窗 -->
+  <div v-if="showKeyModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-key text-blue-500"></i> 配置 Serper API Key
         </h3>
-        <p class="text-xs text-gray-500 mb-3">观察站外发帖前后，绿色 BSR 排名是否发生大幅跳水（说明放量成功）。</p>
-        <div class="border rounded-lg overflow-hidden bg-gray-50">
-          <img :src="keepaChartUrl" alt="Keepa Chart" class="w-full h-auto" />
-        </div>
+        <button @click="showKeyModal = false" class="text-slate-400 hover:text-slate-600 text-lg">&times;</button>
       </div>
-    </div>
 
-  </div>
-
-  <!-- Settings Modal -->
-  <div v-if="showSettings" class="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-    <div class="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
-      <h3 class="text-lg font-bold mb-2">配置 Serper.dev API Key</h3>
-      <p class="text-xs text-gray-500 mb-4">
-        注册 <a href="https://serper.dev" target="_blank" class="text-blue-500 underline">serper.dev</a> 即可获得 2500 次永久免费额度。Key 仅保存在本地浏览器中，绝不会上传。
+      <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+        用于支持在页面内直接获取 Google 站外结果。请前往 <a href="https://serper.dev" target="_blank" class="text-blue-600 font-medium underline">serper.dev</a> 注册并复制 Key（永久免费赠送 2,500 次查询）。<br>
+        <span class="text-amber-600 font-medium">注意：Key 仅保存在你的浏览器本地，绝不上云。</span>
       </p>
-      <input v-model="tempApiKey" type="password" placeholder="输入 Serper API Key" class="w-full border rounded-lg px-3 py-2 text-sm mb-4" />
-      <div class="flex justify-end gap-2">
-        <button @click="showSettings = false" class="px-4 py-2 border rounded-lg text-sm text-gray-600">取消</button>
-        <button @click="saveApiKey" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">保存</button>
+
+      <label class="block text-xs font-semibold text-slate-700 mb-1">API Key</label>
+      <input 
+        v-model="tempKey" 
+        type="password" 
+        placeholder="粘贴你的 Serper API Key..." 
+        class="w-full border border-slate-300 rounded-xl px-3.5 py-2.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none mb-4 font-mono"
+      />
+
+      <div class="flex justify-end gap-2.5">
+        <button @click="clearKey" class="px-4 py-2 text-xs text-rose-600 hover:bg-rose-50 rounded-xl transition">清除配置</button>
+        <button @click="saveKey" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-xl shadow-sm transition">保存</button>
       </div>
     </div>
   </div>
@@ -132,128 +244,153 @@
   createApp({
     data() {
       return {
-        inputQuery: '',
+        rawInput: '',
         currentAsin: '',
+        amazonDomain: 'com',
         loading: false,
-        showSettings: false,
+        showKeyModal: false,
         apiKey: localStorage.getItem('serper_api_key') || '',
-        tempApiKey: localStorage.getItem('serper_api_key') || '',
-        results: []
+        tempKey: localStorage.getItem('serper_api_key') || '',
+        dealList: []
       };
     },
     computed: {
-      keepaChartUrl() {
-        return `https://graph.keepa.com/pricehistory.png?asin=${this.currentAsin}&domain=com`;
+      extractedCodes() {
+        const codes = this.dealList.map(d => d.promoCode).filter(Boolean);
+        return [...new Set(codes)];
+      },
+      platformSummaryText() {
+        if (!this.dealList.length) return '暂无数据';
+        const counts = {};
+        this.dealList.forEach(d => counts[d.platform] = (counts[d.platform] || 0) + 1);
+        return Object.entries(counts).map(([k, v]) => `${k}(${v})`).join(', ');
       }
     },
     methods: {
-      extractAsin(str) {
-        const match = str.match(/(?:\/dp\/|\/gp\/product\/|\/ASIN\/|^)([A-Z0-9]{10})/i);
+      extractAsin(input) {
+        if (!input) return null;
+        const cleaned = input.trim();
+        // 匹配标准 ASIN (10位字符) 或亚马逊各种链接格式
+        const match = cleaned.match(/(?:\/dp\/|\/gp\/product\/|\/ASIN\/|^)([A-Z0-9]{10})(?:[/?&]|$)/i);
         return match ? match[1].toUpperCase() : null;
       },
-      saveApiKey() {
-        this.apiKey = this.tempApiKey.trim();
+      saveKey() {
+        // 清除前后空格，避免 400 Bad Request
+        this.apiKey = this.tempKey.trim();
         localStorage.setItem('serper_api_key', this.apiKey);
-        this.showSettings = false;
+        this.showKeyModal = false;
       },
-async handleSearch() {
-  const asin = this.extractAsin(this.inputQuery);
-  if (!asin) {
-    alert('请输入有效的 ASIN 码或商品 URL！');
-    return;
-  }
-  this.currentAsin = asin;
-
-  // 清洗 Key（去除可能误复制的空格/换行）
-  const cleanKey = (this.apiKey || '').trim();
-  if (!cleanKey) {
-    alert('请先点击右上角配置 Serper API Key');
-    this.showSettings = true;
-    return;
-  }
-
-  this.loading = true;
-  this.results = [];
-
-  try {
-    // 构造最兼容的查询语法
-    const queryStr = `${asin} (site:slickdeals.net OR site:dealnews.com OR site:facebook.com OR site:reddit.com OR site:t.me)`;
-
-    // 发送标准请求（仅保留必需的 q 字段，避免 400 错误）
-    const resp = await fetch('https://google.serper.dev/search', {
-      method: 'POST',
-      headers: {
-        'X-API-KEY': cleanKey,
-        'Content-Type': 'application/json'
+      clearKey() {
+        this.apiKey = '';
+        this.tempKey = '';
+        localStorage.removeItem('serper_api_key');
+        this.showKeyModal = false;
       },
-      body: JSON.stringify({ 
-        q: queryStr 
-      })
-    });
+      async startAnalysis() {
+        const asin = this.extractAsin(this.rawInput);
+        if (!asin) {
+          alert('未能识别到有效的 10 位 ASIN，请检查输入！');
+          return;
+        }
+        this.currentAsin = asin;
 
-    const data = await resp.json();
+        if (!this.apiKey) {
+          // 若无 Key，引导打开快捷免 Key 模式
+          alert('尚未配置 Serper API Key。已为你准备好“免 Key 直达矩阵”，点击下方快捷按钮直接在 Google 查看完整站外结果！');
+          this.openDirectDork('all');
+          return;
+        }
 
-    // 如果服务端返回了错误（例如 400），输出具体原因
-    if (!resp.ok) {
-      console.error('Serper 返回错误详情:', data);
-      alert(`查询失败 (${resp.status}): ${data.message || JSON.stringify(data)}`);
-      return;
-    }
+        this.loading = true;
+        this.dealList = [];
 
-    if (data.organic && data.organic.length > 0) {
-      this.results = data.organic.map(item => {
-        const fullText = `${item.title || ''} ${item.snippet || ''}`;
-        const codeMatch = fullText.match(/(?:code|promo|coupon|use|discount)[:\s]+([A-Z0-9]{4,15})\b/i);
-        const discountMatch = fullText.match(/(\b\d{1,2}%\s*off|\$\d+(?:\.\d{2})?\s*off\b)/i);
+        try {
+          // 精心设计的搜索语法，覆盖各大促销站点，避免 400 格式问题
+          const queryStr = `${asin} (site:slickdeals.net OR site:dealnews.com OR site:facebook.com OR site:reddit.com OR site:t.me OR site:hip2save.com)`;
 
-        return {
-          platform: this.identifyPlatform(item.link || ''),
-          title: item.title,
-          link: item.link,
-          snippet: item.snippet,
-          date: item.date || '近期',
-          promo_code: codeMatch ? codeMatch[1] : null,
-          discount: discountMatch ? discountMatch[1] : null
-        };
-      });
-    } else {
-      console.log('未搜到匹配的站外记录');
-    }
-  } catch (e) {
-    console.error('网络或解析异常:', e);
-    alert('请求发送失败，请检查网络是否能访问 Serper');
-  } finally {
-    this.loading = false;
-  }
-}
+          // 严格采用 Serper 最小安全负载，防止任何非法参数导致 400
+          const response = await fetch('https://google.serper.dev/search', {
+            method: 'POST',
+            headers: {
+              'X-API-KEY': this.apiKey,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ q: queryStr })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            console.error('Serper 返回异常:', data);
+            alert(`API 响应错误 (${response.status}): ${data.message || 'Key 无效或参数错误'}`);
+            return;
+          }
+
+          if (data.organic && data.organic.length > 0) {
+            this.dealList = data.organic.map(item => {
+              const fullText = `${item.title || ''} ${item.snippet || ''} ${item.link || ''}`;
+              
+              // 正则匹配 Promo Code
+              const codeMatch = fullText.match(/(?:code|promo|coupon|use|discount)[:\s]+([A-Z0-9]{4,15})\b/i);
+              // 正则匹配折扣力度
+              const discountMatch = fullText.match(/(\b\d{1,2}%\s*off|\$\d+(?:\.\d{2})?\s*off\b)/i);
+              // 正则提取亚马逊推广 Tag
+              const tagMatch = fullText.match(/tag=([a-zA-Z0-9_\-]+)/i);
+
+              return {
+                platform: this.identifyPlatform(item.link || ''),
+                title: item.title,
+                link: item.link,
+                snippet: item.snippet,
+                date: item.date || '',
+                promoCode: codeMatch ? codeMatch[1] : null,
+                discount: discountMatch ? discountMatch[1] : null,
+                affiliateTag: tagMatch ? tagMatch[1] : null
+              };
+            });
+          }
+        } catch (err) {
+          console.error('请求网络异常:', err);
+          alert('网络请求发送失败。如果是本地测试请确保代理网络通畅，或使用免 Key 模式。');
+        } finally {
+          this.loading = false;
+        }
+      },
       identifyPlatform(url) {
-        if (url.includes('slickdeals.net')) return 'Slickdeals';
-        if (url.includes('dealnews.com')) return 'DealNews';
-        if (url.includes('facebook.com')) return 'Facebook';
-        if (url.includes('reddit.com')) return 'Reddit';
-        if (url.includes('t.me')) return 'Telegram';
-        return '独立博客/其他';
+        if (/slickdeals\.net/i.test(url)) return 'Slickdeals';
+        if (/dealnews\.com/i.test(url)) return 'DealNews';
+        if (/facebook\.com/i.test(url)) return 'Facebook';
+        if (/reddit\.com/i.test(url)) return 'Reddit';
+        if (/t\.me/i.test(url)) return 'Telegram';
+        if (/hip2save\.com/i.test(url)) return 'Hip2Save';
+        return '独立站点/博客';
       },
-      platformBadgeClass(platform) {
-        const map = {
+      badgeClass(platform) {
+        const colors = {
           'Slickdeals': 'bg-amber-100 text-amber-800',
-          'DealNews': 'bg-red-100 text-red-800',
+          'DealNews': 'bg-rose-100 text-rose-800',
           'Facebook': 'bg-blue-100 text-blue-800',
           'Reddit': 'bg-orange-100 text-orange-800',
-          'Telegram': 'bg-sky-100 text-sky-800'
+          'Telegram': 'bg-sky-100 text-sky-800',
+          'Hip2Save': 'bg-emerald-100 text-emerald-800'
         };
-        return map[platform] || 'bg-gray-100 text-gray-800';
+        return colors[platform] || 'bg-slate-100 text-slate-800';
       },
-      openDirectSearch(channel) {
-        const asin = this.extractAsin(this.inputQuery) || 'B0XXXXXXXX';
-        const sites = {
-          all: 'site:slickdeals.net OR site:dealnews.com OR site:facebook.com OR site:reddit.com OR site:t.me',
-          slickdeals: 'site:slickdeals.net',
-          facebook: 'site:facebook.com',
-          telegram: 'site:t.me'
+      openDirectDork(channel) {
+        const asin = this.extractAsin(this.rawInput) || (this.currentAsin ? this.currentAsin : 'B08N5WRWNW');
+        this.currentAsin = asin;
+
+        const dorks = {
+          all: `"${asin}" (site:slickdeals.net OR site:dealnews.com OR site:facebook.com OR site:reddit.com OR site:t.me)`,
+          slickdeals: `"${asin}" site:slickdeals.net`,
+          dealnews: `"${asin}" site:dealnews.com`,
+          facebook: `"${asin}" site:facebook.com`,
+          telegram: `"${asin}" site:t.me`,
+          reddit: `"${asin}" site:reddit.com`
         };
-        const query = encodeURIComponent(`"${asin}" ${sites[channel]}`);
-        window.open(`https://www.google.com/search?q=${query}`, '_blank');
+
+        const targetQuery = dorks[channel] || dorks.all;
+        window.open(`https://www.google.com/search?q=${encodeURIComponent(targetQuery)}`, '_blank');
       }
     }
   }).mount('#app');
