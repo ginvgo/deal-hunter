@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Amazon 永久免费站外推广查询工具</title>
+  <title>Amazon 站外推广反查 (Google 官方 API 版)</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -13,33 +13,28 @@
 
 <div id="app" v-cloak class="max-w-6xl mx-auto px-4 py-8">
 
-  <!-- Header -->
+  <!-- 头部说明 -->
   <header class="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-slate-200 gap-4">
     <div>
       <div class="flex items-center gap-3">
-        <span class="bg-emerald-600 text-white p-2 rounded-xl text-lg flex items-center justify-center shadow-sm">
-          <i class="fa-solid fa-infinity"></i>
+        <span class="bg-blue-600 text-white p-2 rounded-xl text-lg flex items-center justify-center shadow-sm">
+          <i class="fa-brands fa-google"></i>
         </span>
-        <h1 class="text-2xl font-bold tracking-tight text-slate-900">亚马逊站外反查 (永久免费版)</h1>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900">亚马逊站外反查雷达 (Google 原生引擎)</h1>
       </div>
       <p class="text-sm text-slate-500 mt-1">
-        零 API 额度限制 · 直连海外开放数据节点 · 自动提取 Promo Code · Keepa 销量归因
+        基于 Google 官方 API · 每日 100 次永久免费重置 · 原生穿透 Slickdeals/FB/Telegram · Keepa 归因
       </p>
     </div>
 
-    <!-- 站点选择 -->
-    <div class="flex items-center gap-2 text-xs">
-      <span class="text-slate-400">目标国家:</span>
-      <select v-model="amazonDomain" class="bg-white border rounded-lg px-2.5 py-1.5 shadow-sm text-slate-700">
-        <option value="com">🇺🇸 美国站</option>
-        <option value="co.uk">🇬🇧 英国站</option>
-        <option value="de">🇩🇪 德国站</option>
-        <option value="co.jp">🇯🇵 日本站</option>
-      </select>
-    </div>
+    <!-- 配置入口 -->
+    <button @click="showConfig = true" class="flex items-center gap-2 bg-white border border-slate-300 hover:border-slate-400 px-3.5 py-2 rounded-lg text-sm shadow-sm transition">
+      <i class="fa-solid fa-sliders" :class="isConfigured ? 'text-emerald-500' : 'text-amber-500'"></i>
+      <span>{{ isConfigured ? 'API 已就绪 (每日刷新)' : '首次使用：配置 Google 凭证' }}</span>
+    </button>
   </header>
 
-  <!-- 搜索框 -->
+  <!-- 搜索栏 -->
   <section class="mt-6 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
     <div class="flex flex-col md:flex-row gap-3">
       <div class="relative flex-1">
@@ -47,102 +42,70 @@
           <i class="fa-brands fa-amazon"></i>
         </span>
         <input 
-          v-model="rawInput" 
-          @keyup.enter="handleFreeQuery"
+          v-model="inputQuery" 
+          @keyup.enter="handleSearch"
           type="text" 
-          placeholder="输入商品 ASIN (如: B08N5WRWNW) 或亚马逊链接..." 
-          class="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none text-sm"
+          placeholder="输入商品 ASIN (如: B08N5WRWNW) 或亚马逊商品 URL..." 
+          class="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-sm font-mono"
         />
       </div>
       <button 
-        @click="handleFreeQuery" 
+        @click="handleSearch" 
         :disabled="loading"
-        class="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 text-white px-8 py-3 rounded-xl font-medium text-sm transition flex items-center justify-center gap-2 shadow-sm">
+        class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-8 py-3 rounded-xl font-medium text-sm transition flex items-center justify-center gap-2 shadow-sm">
         <i v-if="loading" class="fa-solid fa-circle-notch fa-spin"></i>
-        <span>{{ loading ? '抓取中...' : '免费反查' }}</span>
+        <span>{{ loading ? 'Google 检索中...' : '开始反查' }}</span>
       </button>
     </div>
 
-    <!-- 外部渠道一键穿透直达矩阵 (0 限制，利用你本地浏览器并发穿透) -->
-    <div class="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center gap-2 text-xs">
-      <span class="text-slate-400 font-medium">免 API 原生穿透:</span>
-      <button @click="openDirect('slickdeals')" class="bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 px-3 py-1.5 rounded-lg transition font-medium">
-        <i class="fa-solid fa-tag mr-1"></i>Slickdeals 搜 ASIN
-      </button>
-      <button @click="openDirect('facebook')" class="bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 px-3 py-1.5 rounded-lg transition font-medium">
-        <i class="fa-brands fa-facebook mr-1"></i>Facebook 折扣群
-      </button>
-      <button @click="openDirect('telegram')" class="bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 px-3 py-1.5 rounded-lg transition font-medium">
-        <i class="fa-brands fa-telegram mr-1"></i>Telegram 促销频道
-      </button>
-      <button @click="openDirect('dealnews')" class="bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 px-3 py-1.5 rounded-lg transition font-medium">
-        DealNews 检索
-      </button>
+    <!-- 零配置紧急兜底 -->
+    <div class="mt-4 pt-3 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-400">
+      <span>手动 Google 验证直链:</span>
+      <a :href="`https://www.google.com/search?q=${encodeURIComponent(currentAsin || 'B08N5WRWNW')} (site:slickdeals.net OR site:dealnews.com OR site:facebook.com OR site:t.me)`" target="_blank" class="text-blue-600 hover:underline">
+        在新标签打开原生 Google 检索 <i class="fa-solid fa-arrow-up-right-from-square"></i>
+      </a>
     </div>
   </section>
 
   <!-- 结果呈现 -->
   <main v-if="currentAsin" class="mt-6 space-y-6">
-
-    <!-- 状态面板 -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <span class="text-xs text-slate-400 font-medium">反查 ASIN</span>
-        <div class="text-lg font-bold text-slate-800 mt-1">{{ currentAsin }}</div>
-      </div>
-      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <span class="text-xs text-slate-400 font-medium">检出站外讨论/发帖</span>
-        <div class="text-lg font-bold text-emerald-600 mt-1">{{ posts.length }} 条记录</div>
-      </div>
-      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <span class="text-xs text-slate-400 font-medium">成功提取促销码</span>
-        <div class="text-lg font-bold text-rose-600 mt-1">{{ extractedCodes.length }} 个</div>
-      </div>
-      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-        <span class="text-xs text-slate-400 font-medium">数据源状态</span>
-        <div class="text-xs font-semibold text-emerald-700 mt-2 flex items-center gap-1">
-          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 免费开放节点直连
-        </div>
-      </div>
-    </div>
-
-    <!-- 主视窗：左侧发帖，右侧 Keepa -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-      <!-- 帖子列表 -->
-      <div class="lg:col-span-7 space-y-3">
+      <!-- 左侧结果列表 -->
+      <div class="lg:col-span-7 space-y-4">
         <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
-          <h2 class="font-bold text-slate-800 mb-3 flex items-center gap-2 text-sm">
-            <i class="fa-solid fa-bullhorn text-emerald-600"></i> 公开推广发帖轨迹 (Reddit / Deals 开放节点)
-          </h2>
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <h2 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+              <i class="fa-solid fa-list-check text-blue-600"></i> 检出结果 (共 {{ results.length }} 条)
+            </h2>
+            <span class="text-xs text-slate-400 font-mono">ASIN: {{ currentAsin }}</span>
+          </div>
 
-          <div v-if="posts.length === 0 && !loading" class="py-12 text-center text-slate-400 text-sm">
-            该节点暂无完全包含此 ASIN 文本的公开帖，建议点击上方按钮穿透到 Slickdeals / Facebook。
+          <div v-if="results.length === 0 && !loading" class="py-12 text-center text-slate-400 text-sm">
+            未在公开索引中检出该 ASIN 的站外发帖记录。
           </div>
 
           <div class="divide-y divide-slate-100">
-            <div v-for="(p, idx) in posts" :key="idx" class="py-3.5 hover:bg-slate-50/50 rounded-lg px-2">
+            <div v-for="(item, idx) in results" :key="idx" class="py-3.5 hover:bg-slate-50/50 rounded-lg px-2">
               <div class="flex items-center justify-between text-xs mb-1">
-                <span class="bg-orange-100 text-orange-800 font-bold px-2 py-0.5 rounded-full">
-                  r/{{ p.subreddit }}
+                <span class="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded font-semibold">
+                  {{ item.platform }}
                 </span>
-                <span class="text-slate-400">{{ p.date }}</span>
               </div>
-              <a :href="p.url" target="_blank" class="text-sm font-semibold text-slate-800 hover:text-emerald-600 line-clamp-2">
-                {{ p.title }}
+              <a :href="item.link" target="_blank" class="text-sm font-semibold text-slate-800 hover:text-blue-600 line-clamp-2">
+                {{ item.title }}
               </a>
-              <p class="text-xs text-slate-500 mt-1.5 line-clamp-2">{{ p.content }}</p>
+              <p class="text-xs text-slate-500 mt-1.5 line-clamp-2">{{ item.snippet }}</p>
 
-              <!-- 智能标签 -->
               <div class="mt-2.5 flex items-center gap-2 text-xs">
-                <span v-if="p.code" class="bg-rose-50 text-rose-600 border border-rose-200 px-2 py-0.5 rounded font-mono font-bold">
-                  码: {{ p.code }}
+                <span v-if="item.code" class="bg-rose-50 text-rose-700 border border-rose-200 px-2 py-0.5 rounded font-mono font-bold">
+                  码: {{ item.code }}
                 </span>
-                <span v-if="p.discount" class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-bold">
-                  {{ p.discount }}
+                <span v-if="item.discount" class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-bold">
+                  {{ item.discount }}
                 </span>
-                <a :href="p.url" target="_blank" class="ml-auto text-emerald-600 hover:underline">
-                  查看源链接 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                <a :href="item.link" target="_blank" class="ml-auto text-blue-600 hover:underline">
+                  查看源页面 <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
                 </a>
               </div>
             </div>
@@ -150,37 +113,56 @@
         </div>
       </div>
 
-      <!-- Keepa 归因图 -->
+      <!-- 右侧 Keepa 走势图 -->
       <div class="lg:col-span-5 space-y-4">
         <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm sticky top-6">
           <h3 class="font-bold text-slate-800 mb-2 flex items-center gap-2 text-sm">
-            <i class="fa-solid fa-chart-line text-emerald-600"></i> Keepa 销量/BSR 走势校验
+            <i class="fa-solid fa-chart-line text-emerald-600"></i> Keepa 销量/BSR 异动归因
           </h3>
-          <p class="text-xs text-slate-500 mb-3">核对发帖时间点：若绿色线条数值断崖式下降（代表排名冲顶），表明该次站外放量成功。</p>
-
           <div class="border rounded-xl overflow-hidden bg-slate-50">
             <img 
-              :src="`https://graph.keepa.com/pricehistory.png?asin=${currentAsin}&domain=${amazonDomain}`" 
+              :src="`https://graph.keepa.com/pricehistory.png?asin=${currentAsin}&domain=com`" 
               alt="Keepa History" 
               class="w-full h-auto block"
               loading="lazy"
             />
           </div>
-
-          <div v-if="extractedCodes.length > 0" class="mt-4 pt-3 border-t">
-            <span class="text-xs font-bold text-slate-700 block mb-2">侦测到的优惠码历史：</span>
-            <div class="flex flex-wrap gap-1.5">
-              <span v-for="c in extractedCodes" :key="c" class="bg-rose-50 text-rose-700 border border-rose-200 text-xs px-2 py-1 rounded font-mono font-bold">
-                {{ c }}
-              </span>
-            </div>
-          </div>
         </div>
       </div>
 
     </div>
-
   </main>
+
+  <!-- Google 免费配置弹窗 -->
+  <div v-if="showConfig" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
+      <h3 class="text-lg font-bold text-slate-800 mb-2">配置 Google 官方免费凭证</h3>
+      <p class="text-xs text-slate-500 mb-4 leading-relaxed">
+        Google 官方每天向每个账号提供 <strong>100 次免费查询</strong>，每日自动重置，永久有效。
+      </p>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-bold text-slate-700">1. Google API Key:</label>
+          <input v-model="tempApiKey" type="password" placeholder="AIzaSy..." class="w-full border rounded-lg p-2 mt-1 font-mono" />
+        </div>
+        <div>
+          <label class="font-bold text-slate-700">2. 搜索引擎 ID (CX / Search Engine ID):</label>
+          <input v-model="tempCx" type="text" placeholder="a1b2c3d4..." class="w-full border rounded-lg p-2 mt-1 font-mono" />
+        </div>
+        <div class="bg-slate-50 p-3 rounded-lg text-slate-500 text-[11px] leading-relaxed">
+          <strong>30秒获取步骤：</strong><br>
+          ① 打开 <a href="https://programmablesearchengine.google.com/" target="_blank" class="text-blue-600 underline">Google 自定义搜索后台</a>，新建引擎，搜索范围选择“在整个网络上搜索”，创建后复制 <strong>搜索引擎 ID (CX)</strong>。<br>
+          ② 打开 <a href="https://console.cloud.google.com/apis/credentials" target="_blank" class="text-blue-600 underline">Google Cloud 控制台</a>，启用 <em>Custom Search API</em>，生成一个免费的 <strong>API Key</strong>。
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 mt-5">
+        <button @click="showConfig = false" class="px-4 py-2 text-xs border rounded-lg text-slate-600">取消</button>
+        <button @click="saveConfig" class="px-5 py-2 text-xs bg-blue-600 text-white font-bold rounded-lg shadow-sm">保存并生效</button>
+      </div>
+    </div>
+  </div>
 
 </div>
 
@@ -190,57 +172,77 @@
   createApp({
     data() {
       return {
-        rawInput: '',
+        inputQuery: '',
         currentAsin: '',
-        amazonDomain: 'com',
         loading: false,
-        posts: []
+        showConfig: false,
+        googleApiKey: localStorage.getItem('g_api_key') || '',
+        googleCx: localStorage.getItem('g_cx') || '',
+        tempApiKey: localStorage.getItem('g_api_key') || '',
+        tempCx: localStorage.getItem('g_cx') || '',
+        results: []
       };
     },
     computed: {
-      extractedCodes() {
-        return [...new Set(this.posts.map(p => p.code).filter(Boolean))];
+      isConfigured() {
+        return !!(this.googleApiKey && this.googleCx);
       }
     },
     methods: {
-      extractAsin(input) {
-        if (!input) return null;
-        const match = input.trim().match(/(?:\/dp\/|\/gp\/product\/|\/ASIN\/|^)([A-Z0-9]{10})(?:[/?&]|$)/i);
+      extractAsin(str) {
+        if (!str) return null;
+        const match = str.trim().match(/(?:\/dp\/|\/gp\/product\/|\/ASIN\/|^)([A-Z0-9]{10})(?:[/?&]|$)/i);
         return match ? match[1].toUpperCase() : null;
       },
-      async handleFreeQuery() {
-        const asin = this.extractAsin(this.rawInput);
+      saveConfig() {
+        this.googleApiKey = this.tempApiKey.trim();
+        this.googleCx = this.tempCx.trim();
+        localStorage.setItem('g_api_key', this.googleApiKey);
+        localStorage.setItem('g_cx', this.googleCx);
+        this.showConfig = false;
+      },
+      async handleSearch() {
+        const asin = this.extractAsin(this.inputQuery);
         if (!asin) {
-          alert('请输入有效的 10 位 ASIN！');
+          alert('请输入合法的 10 位 ASIN！');
           return;
         }
         this.currentAsin = asin;
+
+        if (!this.isConfigured) {
+          alert('请先点击右上角配置 Google API Key 与 CX 引擎 ID（每天自动刷新 100 次免费额度）');
+          this.showConfig = true;
+          return;
+        }
+
         this.loading = true;
-        this.posts = [];
+        this.results = [];
 
         try {
-          // 利用 Reddit 官方完全免费、免认证、无跨域限制的开放 JSON 节点
-          const url = `https://www.reddit.com/search.json?q=${asin}&sort=new&limit=25`;
-          const resp = await fetch(url);
+          // 精确 Google 官方检索语法
+          const query = `"${asin}" (site:slickdeals.net OR site:dealnews.com OR site:facebook.com OR site:reddit.com OR site:t.me)`;
+          const endpoint = `https://www.googleapis.com/customsearch/v1?key=${this.googleApiKey}&cx=${this.googleCx}&q=${encodeURIComponent(query)}`;
+
+          const resp = await fetch(endpoint);
           const data = await resp.json();
 
-          if (data && data.data && data.data.children) {
-            this.posts = data.data.children.map(c => {
-              const item = c.data;
-              const text = `${item.title} ${item.selftext || ''}`;
-              
+          if (!resp.ok) {
+            console.error('Google API Error:', data);
+            alert(`Google API 返回错误: ${data.error?.message || '请检查 Key 与 CX 配置'}`);
+            return;
+          }
+
+          if (data.items && data.items.length > 0) {
+            this.results = data.items.map(item => {
+              const text = `${item.title} ${item.snippet}`;
               const codeMatch = text.match(/(?:code|promo|coupon|use|discount)[:\s]+([A-Z0-9]{4,15})\b/i);
               const discountMatch = text.match(/(\b\d{1,2}%\s*off|\$\d+(?:\.\d{2})?\s*off\b)/i);
 
-              const d = new Date(item.created_utc * 1000);
-              const dateStr = `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-
               return {
-                subreddit: item.subreddit,
                 title: item.title,
-                content: item.selftext || '链接分享贴',
-                url: `https://www.reddit.com${item.permalink}`,
-                date: dateStr,
+                link: item.link,
+                snippet: item.snippet,
+                platform: this.getPlatform(item.link),
                 code: codeMatch ? codeMatch[1] : null,
                 discount: discountMatch ? discountMatch[1] : null
               };
@@ -248,19 +250,18 @@
           }
         } catch (e) {
           console.error(e);
+          alert('请求异常，请检查网络或是否需要代理访问 Google');
         } finally {
           this.loading = false;
         }
       },
-      openDirect(channel) {
-        const asin = this.extractAsin(this.rawInput) || this.currentAsin || 'B08N5WRWNW';
-        const dorks = {
-          slickdeals: `https://slickdeals.net/newsearch.php?q=${asin}`,
-          dealnews: `https://www.dealnews.com/s/?search=${asin}`,
-          facebook: `https://www.google.com/search?q=${encodeURIComponent('"' + asin + '" site:facebook.com')}`,
-          telegram: `https://www.google.com/search?q=${encodeURIComponent('"' + asin + '" site:t.me')}`
-        };
-        if (dorks[channel]) window.open(dorks[channel], '_blank');
+      getPlatform(url) {
+        if (/slickdeals\.net/i.test(url)) return 'Slickdeals';
+        if (/dealnews\.com/i.test(url)) return 'DealNews';
+        if (/facebook\.com/i.test(url)) return 'Facebook';
+        if (/reddit\.com/i.test(url)) return 'Reddit';
+        if (/t\.me/i.test(url)) return 'Telegram';
+        return '其他独立站/论坛';
       }
     }
   }).mount('#app');
